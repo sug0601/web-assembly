@@ -10,18 +10,18 @@
             resize_image,
             invert_colors,
             clip_image,
-            blur_image
+            blur_image,
+            pixelate_image,
+            blend_images
         } from "./pkg/wasm_project.js";
 
         async function run() {
             await init();
 
-            const fileInput = document.getElementById('fileInput');
             const resultDiv = document.getElementById('result');
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            // ファイルをBase64に変換
             function getBase64(file) {
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -31,68 +31,95 @@
                 });
             }
 
-            // 画像を表示する関数
             function displayImage(base64Image) {
                 const img = new Image();
                 img.onload = function () {
                     canvas.width = img.width;
                     canvas.height = img.height;
                     ctx.drawImage(img, 0, 0);
-                    resultDiv.innerHTML = ''; // 前の結果をクリア
+                    resultDiv.innerHTML = '';
                     resultDiv.appendChild(canvas);
                 };
                 img.src = "data:image/png;base64," + base64Image;
             }
 
-            // グレースケール処理ボタン
             document.getElementById('grayscaleBtn').onclick = async () => {
-                const base64Data = await getBase64(fileInput.files[0]);
+                const file = document.getElementById('fileInput').files[0];
+                if (!file) return alert("画像を選択してください");
                 try {
-                    const result = await convert_to_grayscale(base64Data);
+                    const result = await convert_to_grayscale(await getBase64(file));
                     displayImage(result);
                 } catch (e) {
                     alert("エラー: " + e);
                 }
             };
 
-            // リサイズ処理ボタン
             document.getElementById('resizeBtn').onclick = async () => {
-                const base64Data = await getBase64(fileInput.files[0]);
+                const file = document.getElementById('fileInput').files[0];
+                if (!file) return alert("画像を選択してください");
                 try {
-                    const result = await resize_image(base64Data, 300, 300); // 300x300にリサイズ
+                    const result = await resize_image(await getBase64(file), 300, 300);
                     displayImage(result);
                 } catch (e) {
                     alert("エラー: " + e);
                 }
             };
 
-            // 色反転処理ボタン
             document.getElementById('invertBtn').onclick = async () => {
-                const base64Data = await getBase64(fileInput.files[0]);
+                const file = document.getElementById('fileInput').files[0];
+                if (!file) return alert("画像を選択してください");
                 try {
-                    const result = await invert_colors(base64Data);
+                    const result = await invert_colors(await getBase64(file));
                     displayImage(result);
                 } catch (e) {
                     alert("エラー: " + e);
                 }
             };
 
-            // クロップ処理ボタン
             document.getElementById('cropBtn').onclick = async () => {
-                const base64Data = await getBase64(fileInput.files[0]);
+                const file = document.getElementById('fileInput').files[0];
+                if (!file) return alert("画像を選択してください");
                 try {
-                    const result = await clip_image(base64Data, 50, 50, 200, 200); // クロップ (50,50)から200x200の領域
+                    const result = await clip_image(await getBase64(file), 50, 50, 200, 200);
                     displayImage(result);
                 } catch (e) {
                     alert("エラー: " + e);
                 }
             };
 
-            // ぼかし処理ボタン
             document.getElementById('blurBtn').onclick = async () => {
-                const base64Data = await getBase64(fileInput.files[0]);
+                const file = document.getElementById('fileInput').files[0];
+                if (!file) return alert("画像を選択してください");
                 try {
-                    const result = await blur_image(base64Data, 5.0); // ぼかし半径5.0
+                    const result = await blur_image(await getBase64(file), 5.0);
+                    displayImage(result);
+                } catch (e) {
+                    alert("エラー: " + e);
+                }
+            };
+
+            document.getElementById('dotBtn').onclick = async () => {
+                const file = document.getElementById('fileInput').files[0];
+                if (!file) return alert("画像を選択してください");
+                const blockSize = parseInt(document.getElementById('blockSize').value, 10) || 10;
+                try {
+                    const result = await pixelate_image(await getBase64(file), blockSize);
+                    displayImage(result);
+                } catch (e) {
+                    alert("エラー: " + e);
+                }
+            };
+
+            document.getElementById('blendBtn').onclick = async () => {
+                const file1 = document.getElementById('fileInput1').files[0];
+                const file2 = document.getElementById('fileInput2').files[0];
+                const alpha = parseFloat(document.getElementById('alphaRange').value);
+
+                if (!file1 || !file2) return alert("2つの画像を選択してください");
+                try {
+                    const base64Data1 = await getBase64(file1);
+                    const base64Data2 = await getBase64(file2);
+                    const result = await blend_images(base64Data1, base64Data2, alpha);
                     displayImage(result);
                 } catch (e) {
                     alert("エラー: " + e);
@@ -106,6 +133,7 @@
 <body>
     <h1>画像処理 WebAssembly</h1>
 
+    <h2>単体画像処理</h2>
     <input type="file" id="fileInput">
     <br><br>
 
@@ -114,6 +142,22 @@
     <button id="invertBtn">色反転</button>
     <button id="cropBtn">クロップ (50,50) から 200x200</button>
     <button id="blurBtn">ぼかし (半径5)</button>
+    
+    <br><br>
+
+    <label for="blockSize">ブロックサイズ：</label>
+    <input type="number" id="blockSize" value="10" min="1">
+    <button id="dotBtn">ドット化</button>
+
+    <br><br>
+
+    <h2>画像ブレンド</h2>
+    <input type="file" id="fileInput1">
+    <input type="file" id="fileInput2">
+    <br><br>
+    <label for="alphaRange">ブレンド比率:</label>
+    <input type="range" id="alphaRange" min="0" max="1" step="0.1" value="0.5">
+    <button id="blendBtn">画像ブレンド</button>
 
     <br><br>
 
