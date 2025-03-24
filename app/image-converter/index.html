@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Processing with Rust & WebAssembly</title>
+    <script type="module">
+        import init, {
+            convert_to_grayscale,
+            resize_image,
+            invert_colors,
+            clip_image,
+            blur_image
+        } from "./pkg/wasm_project.js";
+
+        async function run() {
+            await init();
+
+            const fileInput = document.getElementById('fileInput');
+            const resultDiv = document.getElementById('result');
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // ファイルをBase64に変換
+            function getBase64(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            // 画像を表示する関数
+            function displayImage(base64Image) {
+                const img = new Image();
+                img.onload = function () {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    resultDiv.innerHTML = ''; // 前の結果をクリア
+                    resultDiv.appendChild(canvas);
+                };
+                img.src = "data:image/png;base64," + base64Image;
+            }
+
+            // グレースケール処理ボタン
+            document.getElementById('grayscaleBtn').onclick = async () => {
+                const base64Data = await getBase64(fileInput.files[0]);
+                try {
+                    const result = await convert_to_grayscale(base64Data);
+                    displayImage(result);
+                } catch (e) {
+                    alert("エラー: " + e);
+                }
+            };
+
+            // リサイズ処理ボタン
+            document.getElementById('resizeBtn').onclick = async () => {
+                const base64Data = await getBase64(fileInput.files[0]);
+                try {
+                    const result = await resize_image(base64Data, 300, 300); // 300x300にリサイズ
+                    displayImage(result);
+                } catch (e) {
+                    alert("エラー: " + e);
+                }
+            };
+
+            // 色反転処理ボタン
+            document.getElementById('invertBtn').onclick = async () => {
+                const base64Data = await getBase64(fileInput.files[0]);
+                try {
+                    const result = await invert_colors(base64Data);
+                    displayImage(result);
+                } catch (e) {
+                    alert("エラー: " + e);
+                }
+            };
+
+            // クロップ処理ボタン
+            document.getElementById('cropBtn').onclick = async () => {
+                const base64Data = await getBase64(fileInput.files[0]);
+                try {
+                    const result = await clip_image(base64Data, 50, 50, 200, 200); // クロップ (50,50)から200x200の領域
+                    displayImage(result);
+                } catch (e) {
+                    alert("エラー: " + e);
+                }
+            };
+
+            // ぼかし処理ボタン
+            document.getElementById('blurBtn').onclick = async () => {
+                const base64Data = await getBase64(fileInput.files[0]);
+                try {
+                    const result = await blur_image(base64Data, 5.0); // ぼかし半径5.0
+                    displayImage(result);
+                } catch (e) {
+                    alert("エラー: " + e);
+                }
+            };
+        }
+
+        run();
+    </script>
+</head>
+<body>
+    <h1>画像処理 WebAssembly</h1>
+
+    <input type="file" id="fileInput">
+    <br><br>
+
+    <button id="grayscaleBtn">グレースケール</button>
+    <button id="resizeBtn">リサイズ (300x300)</button>
+    <button id="invertBtn">色反転</button>
+    <button id="cropBtn">クロップ (50,50) から 200x200</button>
+    <button id="blurBtn">ぼかし (半径5)</button>
+
+    <br><br>
+
+    <div id="result"></div>
+</body>
+</html>
