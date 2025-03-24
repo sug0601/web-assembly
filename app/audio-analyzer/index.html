@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASM Audio Processing</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            width: 100%;
+            height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WASM Audio Processing</h1>
+    <button id="start-btn">Start Recording</button>
+    <button id="stop-btn" disabled>Stop Recording</button>
+    <p id="output"></p>
+    <canvas id="frequencyCanvas"></canvas>
+
+    <script type="module">
+        import init, { process_frequency_data } from "./pkg/wasm_project.js";
+
+        async function run() {
+            await init();
+
+            const startButton = document.getElementById("start-btn");
+            const stopButton = document.getElementById("stop-btn");
+            const output = document.getElementById("output");
+            const canvas = document.getElementById("frequencyCanvas");
+            const canvasCtx = canvas.getContext("2d");
+
+            let audioContext;
+            let analyser;
+            let dataArray;
+            let mediaStream;
+            let animationFrameId;
+
+            startButton.addEventListener("click", async () => {
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    
+                    const source = audioContext.createMediaStreamSource(mediaStream);
+                    source.connect(analyser);
+
+                    analyser.fftSize = 512; // FFTサイズを設定（小さいと解像度が低い）
+                    const bufferLength = analyser.frequencyBinCount;
+                    dataArray = new Uint8Array(bufferLength);
+
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+
+                    processAudio();
+                } catch (err) {
+                    console.error("Error accessing microphone:", err);
+                }
+            });
+
+            stopButton.addEventListener("click", () => {
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                }
+                if (audioContext) {
+                    audioContext.close();
+                }
+                cancelAnimationFrame(animationFrameId);
+
+                startButton.disabled = false;
+                stopButton.disabled = true;
+            });
+
+            function processAudio() {
+                analyser.getByteFrequencyData(dataArray);
+
+                // WASM で処理
+                const processedData = process_frequency_data(dataArray);
+
+                // 周波数スペクトラムを描画
+                drawFrequencyData(processedData);
+
+                animationFrameId = requestAnimationFrame(processAudio);
+            }
+
+            function drawFrequencyData(data) {
+                const width = canvas.width;
+                const height = canvas.height;
+                const barWidth = width / data.length;
+
+                canvasCtx.clearRect(0, 0, width, height);
+                canvasCtx.fillStyle = "rgb(0, 0, 0)";
+                canvasCtx.fillRect(0, 0, width, height);
+
+                // Begin path for drawing smooth line
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(0, height - (data[0] / 255) * height);
+
+                // Loop through data points to draw a smooth line
+                for (let i = 1; i < data.length; i++) {
+                    const x = i * barWidth;
+                    const y = height - (data[i] / 255) * height;
+
+                    // Make the line smooth using quadratic curves
+                    const prevX = (i - 1) * barWidth;
+                    const prevY = height - (data[i - 1] / 255) * height;
+                    const midX = (x + prevX) / 2;
+                    const midY = (y + prevY) / 2;
+
+                    // Use a quadratic curve for smooth connection
+                    canvasCtx.quadraticCurveTo(prevX, prevY, midX, midY);
+                }
+
+                // Connect the last point
+                canvasCtx.lineTo(width, height - (data[data.length - 1] / 255) * height);
+
+                // Color the line with smooth gradient
+                const gradient = canvasCtx.createLinearGradient(0, 0, width, 0);
+                gradient.addColorStop(0, "blue");
+                gradient.addColorStop(0.5, "green");
+                gradient.addColorStop(1, "red");
+
+                canvasCtx.strokeStyle = gradient;
+                canvasCtx.lineWidth = 2;
+                canvasCtx.stroke();
+            }
+        }
+
+        run();
+    </script>
+</body>
+</html>
